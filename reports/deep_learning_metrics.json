@@ -1,0 +1,28 @@
+{
+  "sentiment": {
+    "accuracy": 1.0,
+    "epochs": 8,
+    "final_loss": 0.4055461883544922,
+    "architecture": "Embedding + Bidirectional GRU + Dropout + Dense",
+    "vocabulary_max": 10000,
+    "sequence_length": 200
+  },
+  "resolution_time": {
+    "mae": 3.8704843521118164,
+    "rmse": 4.624247721758373,
+    "r2": 0.07211577892303467,
+    "epochs": 16,
+    "mixed_inputs": [
+      "category_one_hot",
+      "priority",
+      "description_embedding",
+      "hour",
+      "weekday"
+    ]
+  },
+  "callbacks": [
+    "EarlyStopping(patience=3)",
+    "ModelCheckpoint",
+    "ReduceLROnPlateau"
+  ]
+}
