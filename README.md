@@ -150,9 +150,9 @@ pipeline; no representan rendimiento esperado con datos reales de clientes.
 
 | Seccion | Tiempo aproximado |
 | --- | ---: |
-| Arquitectura y configuracion | 25 min |
-| Scikit-learn: tickets y churn | 45 min |
-| TensorFlow/Keras | 25 min |
-| LangGraph | 15 min |
-| FastAPI, SQLAlchemy, JWT y MCP | 40 min |
-| Pruebas y documentacion | 20 min |
+| Arquitectura y configuracion | 15 min |
+| Scikit-learn: tickets y churn | 25 min |
+| TensorFlow/Keras | 5 min |
+| LangGraph | 5 min |
+| FastAPI, SQLAlchemy, JWT y MCP | 5 min |
+| Pruebas y documentacion | 5 min |
