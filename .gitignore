@@ -22,6 +22,9 @@ artifacts/metrics/*
 data/processed/*
 !data/processed/.gitkeep
 
+# Informes reproducibles y modelos finales seleccionados se agregan explicitamente
+# despues de la validacion local.
+
 .idea/
 .vscode/
 .DS_Store
