@@ -29,6 +29,64 @@ from app.ml.tickets.data import TICKET_CATEGORIES
 
 MINIMUM_TEXT_LENGTH = 10
 
+DOMAIN_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "CNCL",
+        (
+            "cancelar",
+            "cancelación",
+            "dar de baja",
+            "baja del servicio",
+            "terminar contrato",
+            "finalizar contrato",
+            "cerrar mi cuenta",
+            "anular la renovación",
+        ),
+    ),
+    (
+        "BILL",
+        (
+            "factura",
+            "facturación",
+            "facturacion",
+            "cobro",
+            "pago",
+            "deuda",
+            "mensualidad",
+            "cargo adicional",
+            "método de pago",
+            "metodo de pago",
+        ),
+    ),
+    (
+        "PLAN",
+        (
+            "cambiar mi plan",
+            "cambio de plan",
+            "planes disponibles",
+            "nuevo plan",
+            "agregar televisión",
+            "agregar television",
+            "paquete de servicios",
+            "promociones vigentes",
+        ),
+    ),
+    (
+        "TECH",
+        (
+            "router",
+            "módem",
+            "modem",
+            "wifi",
+            "sin conexión",
+            "sin conexion",
+            "internet lento",
+            "señal",
+            "desconecta",
+        ),
+    ),
+)
+
 
 class SpanishTextCleaner(BaseEstimator, TransformerMixin):
     """Normalize Spanish text while preserving accents and the letter enye."""
@@ -293,13 +351,39 @@ class TicketClassifier:
         predicted_category = str(self.pipeline.predict([valid_text])[0])
         probabilities = self.pipeline.predict_proba([valid_text])[0]
         classifier = self.pipeline.named_steps["classifier"]
+        probability_map = {
+            str(category): float(probability)
+            for category, probability in zip(classifier.classes_, probabilities, strict=True)
+        }
+        rule_category = self._domain_category(valid_text)
+        if rule_category and rule_category != predicted_category:
+            remaining_probability = 0.2
+            other_total = sum(
+                probability for category, probability in probability_map.items() if category != rule_category
+            )
+            for category in probability_map:
+                if category == rule_category:
+                    probability_map[category] = 0.8
+                else:
+                    probability_map[category] = (
+                        remaining_probability * probability_map[category] / other_total
+                        if other_total
+                        else remaining_probability / (len(probability_map) - 1)
+                    )
+            predicted_category = rule_category
 
         return {
             "category": predicted_category,
-            "probabilities": {
-                str(category): float(probability)
-                for category, probability in zip(classifier.classes_, probabilities, strict=True)
-            },
+            "probabilities": probability_map,
             "model_name": self.metadata["selected_model"],
             "model_version": self.metadata["model_version"],
+            "classification_source": "domain_rule" if rule_category else "ml_model",
         }
+
+    @staticmethod
+    def _domain_category(text: str) -> str | None:
+        normalized = SpanishTextCleaner.clean(text)
+        for category, keywords in DOMAIN_KEYWORDS:
+            if any(keyword in normalized for keyword in keywords):
+                return category
+        return None

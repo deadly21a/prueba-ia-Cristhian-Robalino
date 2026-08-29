@@ -54,3 +54,21 @@ def test_trained_classifier_returns_category_and_all_probabilities(tmp_path: Pat
     assert set(prediction["probabilities"]) == set(TICKET_CATEGORIES)
     assert sum(prediction["probabilities"].values()) == pytest.approx(1.0)
     assert model_path.exists()
+
+
+def test_billing_status_phrase_is_not_confused_with_cancellation(tmp_path: Path) -> None:
+    dataset = generate_ticket_dataset(samples_per_category=10, random_state=17)
+    result = train_ticket_classifier(dataset, random_state=17)
+    model_path = tmp_path / "ticket_classifier.joblib"
+    save_training_outputs(
+        result,
+        model_path=model_path,
+        metrics_path=tmp_path / "metrics.json",
+        confusion_matrix_path=tmp_path / "matrix.svg",
+    )
+
+    prediction = TicketClassifier(model_path).predict("Quiero saber mi estado de facturacion")
+
+    assert prediction["category"] == "BILL"
+    assert prediction["classification_source"] == "domain_rule"
+    assert prediction["probabilities"]["BILL"] == pytest.approx(0.8)
