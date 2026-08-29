@@ -1,0 +1,13 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - model_artifacts:/app/artifacts/models
+    restart: unless-stopped
+
+volumes:
+  model_artifacts:
