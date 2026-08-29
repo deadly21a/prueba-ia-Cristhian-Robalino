@@ -59,6 +59,313 @@ Docker Compose utiliza los valores seguros de desarrollo cuando no existe un arc
 pytest
 ```
 
+Para ejecutar las mismas validaciones usadas durante el desarrollo en Windows:
+
+```powershell
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1"
+.venv\Scripts\python.exe -m ruff check app tests scripts
+.venv\Scripts\python.exe -m pytest -q
+```
+
+Resultado local esperado: `9 passed`.
+
+## Pruebas manuales de la API
+
+Los ejemplos siguientes forman un flujo completo y pueden copiarse en PowerShell.
+Primero inicie la API con `uvicorn app.main:app --reload`.
+
+### 1. Autenticacion y refresh token
+
+```powershell
+$baseUrl = "http://127.0.0.1:8000"
+$loginBody = @{
+    username = "admin"
+    password = "admin123"
+} | ConvertTo-Json
+
+$tokens = Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/auth/login" `
+    -ContentType "application/json" `
+    -Body $loginBody
+
+$headers = @{ Authorization = "Bearer $($tokens.access_token)" }
+
+$refreshBody = @{
+    refresh_token = $tokens.refresh_token
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/auth/refresh" `
+    -ContentType "application/json" `
+    -Body $refreshBody
+```
+
+### 2. Customers: crear, listar, consultar y actualizar
+
+```powershell
+$customerBody = @{
+    name = "Cliente Demo"
+    email = "cliente.demo@example.com"
+    phone = "0991234567"
+    plan_type = "fiber"
+    tenure_months = 6
+    monthly_charge = 75.50
+    total_charges = 453.00
+    contract_type = "month-to-month"
+    payment_method = "card"
+    num_tickets = 2
+    avg_satisfaction = 3.5
+} | ConvertTo-Json
+
+$customer = Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/customers" `
+    -Headers $headers `
+    -ContentType "application/json" `
+    -Body $customerBody
+
+$customerId = $customer.id
+
+Invoke-RestMethod -Uri "$baseUrl/api/v1/customers" -Headers $headers
+Invoke-RestMethod -Uri "$baseUrl/api/v1/customers/$customerId" -Headers $headers
+
+$customerUpdate = @{
+    name = "Cliente Demo Actualizado"
+    email = "cliente.demo@example.com"
+    phone = "0987654321"
+    plan_type = "premium"
+    tenure_months = 7
+    monthly_charge = 90.00
+    total_charges = 630.00
+    contract_type = "one-year"
+    payment_method = "bank-transfer"
+    num_tickets = 2
+    avg_satisfaction = 4.0
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+    -Method Put `
+    -Uri "$baseUrl/api/v1/customers/$customerId" `
+    -Headers $headers `
+    -ContentType "application/json" `
+    -Body $customerUpdate
+
+Invoke-RestMethod `
+    -Uri "$baseUrl/api/v1/customers/$customerId/churn-prediction"
+```
+
+Prueba de validacion de telefono, cuyo resultado esperado es HTTP `422`:
+
+```powershell
+$invalidCustomer = @{
+    name = "QA"
+    email = "invalid@example.com"
+    phone = "123"
+} | ConvertTo-Json
+
+Invoke-WebRequest `
+    -SkipHttpErrorCheck `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/customers" `
+    -Headers $headers `
+    -ContentType "application/json" `
+    -Body $invalidCustomer
+```
+
+### 3. Tickets: clasificar, crear, listar, consultar y actualizar
+
+```powershell
+$classificationBody = @{
+    description = "El router no enciende y no tengo conexion a internet desde ayer"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/tickets/classify" `
+    -ContentType "application/json" `
+    -Body $classificationBody
+
+$ticketBody = @{
+    customer_id = $customerId
+    description = "El router no enciende y no tengo conexion a internet desde ayer"
+    priority = "high"
+} | ConvertTo-Json
+
+$ticket = Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/tickets" `
+    -ContentType "application/json" `
+    -Body $ticketBody
+
+$ticketId = $ticket.id
+
+Invoke-RestMethod -Uri "$baseUrl/api/v1/tickets"
+Invoke-RestMethod -Uri "$baseUrl/api/v1/tickets/$ticketId"
+
+$ticketUpdate = @{
+    description = "Necesito revisar un cobro duplicado que aparece en mi factura mensual"
+    priority = "medium"
+    status = "in_progress"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+    -Method Put `
+    -Uri "$baseUrl/api/v1/tickets/$ticketId" `
+    -ContentType "application/json" `
+    -Body $ticketUpdate
+```
+
+El primer texto debe clasificarse como `TECH`; después de actualizarlo con una consulta
+de facturacion debe clasificarse como `BILL`.
+
+### 4. Endpoints de Machine Learning
+
+```powershell
+Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/ml/classify-ticket" `
+    -ContentType "application/json" `
+    -Body $classificationBody
+
+$churnBody = @{
+    tenure_months = 3
+    monthly_charge = 110
+    total_charges = 330
+    contract_type = "month-to-month"
+    payment_method = "cash"
+    num_tickets = 7
+    avg_satisfaction = 1.5
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/ml/predict-churn" `
+    -ContentType "application/json" `
+    -Body $churnBody
+
+$sentimentBody = @{
+    description = "Estoy muy molesto porque el servicio nunca funciona"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/ml/analyze-sentiment" `
+    -ContentType "application/json" `
+    -Body $sentimentBody
+
+Invoke-RestMethod -Uri "$baseUrl/api/v1/ml/models/info"
+```
+
+Resultados esperados: probabilidades entre `0` y `1`, sentimiento `negative` y ambos
+modelos Scikit-learn reportados como disponibles.
+
+### 5. Agente conversacional y memoria de sesion
+
+```powershell
+$chatBody = @{
+    message = "Estoy frustrado porque el wifi nunca funciona"
+    customer_id = $customerId
+} | ConvertTo-Json
+
+$chat = Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/agent/chat" `
+    -ContentType "application/json" `
+    -Body $chatBody
+
+$sessionId = $chat.session_id
+
+$followUpBody = @{
+    message = "Gracias, ahora ya funciona correctamente"
+    session_id = $sessionId
+    customer_id = $customerId
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/agent/chat" `
+    -ContentType "application/json" `
+    -Body $followUpBody
+
+Invoke-RestMethod -Uri "$baseUrl/api/v1/agent/sessions/$sessionId"
+```
+
+La primera respuesta debe indicar intención `technical`, `escalate: true` e incluir
+en el contexto la categoria del ticket, informacion del cliente y su riesgo de churn.
+La consulta de la sesion debe contener cuatro mensajes.
+
+### 6. MCP: capacidades, recursos y cinco tools
+
+```powershell
+Invoke-RestMethod -Uri "$baseUrl/mcp/capabilities"
+Invoke-RestMethod -Uri "$baseUrl/mcp/resources"
+Invoke-RestMethod -Uri "$baseUrl/mcp/resources/customers"
+
+function Invoke-McpTool($requestId, $tool, $arguments) {
+    $body = @{
+        jsonrpc = "2.0"
+        id = $requestId
+        tool = $tool
+        arguments = $arguments
+    } | ConvertTo-Json -Depth 8
+
+    Invoke-RestMethod `
+        -Method Post `
+        -Uri "$baseUrl/mcp/tools/execute" `
+        -ContentType "application/json" `
+        -Body $body
+}
+
+Invoke-McpTool "mcp-1" "classify_ticket" @{
+    description = "Tengo un cobro duplicado en la factura de este mes"
+}
+
+Invoke-McpTool "mcp-2" "predict_churn" @{
+    tenure_months = 3
+    monthly_charge = 110
+    total_charges = 330
+    contract_type = "month-to-month"
+    payment_method = "cash"
+    num_tickets = 7
+    avg_satisfaction = 1.5
+}
+
+Invoke-McpTool "mcp-3" "get_customer_info" @{
+    customer_id = $customerId
+}
+
+Invoke-McpTool "mcp-4" "create_ticket" @{
+    customer_id = $customerId
+    description = "La conexion de internet se desconecta constantemente durante el dia"
+    priority = "high"
+}
+
+Invoke-McpTool "mcp-5" "chat_with_agent" @{
+    message = "Necesito ayuda con mi factura"
+    customer_id = $customerId
+}
+```
+
+Cada respuesta debe conservar `jsonrpc: "2.0"`, el mismo `id` y
+`result.isError: false`.
+
+### 7. Eliminaciones logicas al terminar las pruebas
+
+```powershell
+Invoke-RestMethod `
+    -Method Delete `
+    -Uri "$baseUrl/api/v1/agent/sessions/$sessionId"
+
+Invoke-RestMethod `
+    -Method Delete `
+    -Uri "$baseUrl/api/v1/customers/$customerId" `
+    -Headers $headers
+```
+
+Una consulta posterior de cualquiera de los dos recursos debe responder HTTP `404`.
+
 ## Clasificador de tickets
 
 El clasificador reconoce cinco categorias:
