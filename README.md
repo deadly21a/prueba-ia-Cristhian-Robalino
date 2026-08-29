@@ -446,12 +446,7 @@ en 30 minutos y los refresh tokens en 7 dias; ambos valores son configurables.
 Los resultados se obtuvieron con datos sinteticos y demuestran el funcionamiento del
 pipeline; no representan rendimiento esperado con datos reales de clientes.
 
-## Dificultades encontradas
 
-- No se proporcionaron datasets reales, por lo que se generaron datasets balanceados y reproducibles.
-- Docker no esta instalado en el equipo de desarrollo; sus archivos se validaron estaticamente.
-- La politica de Control de aplicaciones de Windows bloqueo temporalmente DLL nativas de
-  TensorFlow y SQLite; despues de habilitarlas se ejecutaron las pruebas y entrenamientos.
 
 ## Tiempo dedicado
 
